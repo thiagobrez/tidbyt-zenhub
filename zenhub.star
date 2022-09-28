@@ -4,6 +4,7 @@ load("encoding/base64.star", "base64")
 load("cache.star", "cache")
 load("encoding/json.star", "json")
 load("schema.star", "schema")
+load("hash.star", "hash")
 
 ZENHUB_REST_API_URL = "https://api.zenhub.com"
 ZENHUB_GQL_API_URL = "https://api.zenhub.com/public/graphql"
@@ -12,48 +13,48 @@ ZENHUB_ICON = base64.decode("""iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAA
 def render_error(message, small = False):
     return render.Root(
         child = render.Column(
-            expanded=True,
-            main_align="space_evenly",
-            cross_align="center",
-            children=[
+            expanded = True,
+            main_align = "space_evenly",
+            cross_align = "center",
+            children = [
                 render.Padding(
-                    pad=(1, 1, 0, 0),
-                    child=render.Row(
-                        expanded=True,
-                        main_align="start",
-                        cross_align="center",
-                        children=[
-                            render.Image(src=ZENHUB_ICON),
+                    pad = (1, 1, 0, 0),
+                    child = render.Row(
+                        expanded = True,
+                        main_align = "start",
+                        cross_align = "center",
+                        children = [
+                            render.Image(src = ZENHUB_ICON),
                             render.Padding(
-                                pad=(1, 0, 0, 0),
-                                child=render.Text("Zenhub APP")
-                            )
+                                pad = (1, 0, 0, 0),
+                                child = render.Text("Zenhub APP"),
+                            ),
                         ],
                     ),
                 ),
                 render.Padding(
-                    pad=(1, 1, 0, 0),
-                    child=render.Column(
-                        expanded=True,
-                        main_align="space_evenly",
-                        cross_align="start",
-                        children=[
+                    pad = (1, 1, 0, 0),
+                    child = render.Column(
+                        expanded = True,
+                        main_align = "space_evenly",
+                        cross_align = "start",
+                        children = [
                             render.Row(
-                                expanded=True,
-                                main_align="space_evenly",
-                                cross_align="center",
-                                children=[
+                                expanded = True,
+                                main_align = "space_evenly",
+                                cross_align = "center",
+                                children = [
                                     render.WrappedText(
-                                        content=message,
-                                        font="CG-pixel-3x5-mono" if small else "tb-8",
-                                        color="#f75c5c"
+                                        content = message,
+                                        font = "CG-pixel-3x5-mono" if small else "tb-8",
+                                        color = "#f75c5c",
                                     ),
                                 ],
-                            )
-                        ]
-                    )
-                )
-            ]
+                            ),
+                        ],
+                    ),
+                ),
+            ],
         ),
     )
 
@@ -89,13 +90,13 @@ def main(config):
     filters = {}
 
     if len(selected_labels) > 0:
-        filters["labels"] = { "in": selected_labels }
+        filters["labels"] = {"in": selected_labels}
 
     if len(selected_assignees) > 0:
-        filters["assignees"] = { "in": selected_assignees }
+        filters["assignees"] = {"in": selected_assignees}
 
-    pipeline_cache = cache.get("zenhubapp_pipeline")
-    issues_cache = cache.get("zenhubapp_issues")
+    pipeline_cache = cache.get("zenhubapp_pipeline_%s" % hash.md5(zenhub_gql_api_key))
+    issues_cache = cache.get("zenhubapp_issues_%s" % hash.md5(zenhub_gql_api_key))
 
     if pipeline_cache != None:
         print("[ZENHUB APP] Pipeline cache hit")
@@ -105,10 +106,10 @@ def main(config):
 
         board_res = http.get(
             "%s/p2/workspaces/%s/repositories/%d/board" % (ZENHUB_REST_API_URL, workspace_id, repo_id),
-            headers={
+            headers = {
                 "X-Authentication-Token": zenhub_rest_api_key,
-                "Content-Type": "application/json"
-            }
+                "Content-Type": "application/json",
+            },
         )
 
         if board_res.status_code != 200:
@@ -127,7 +128,7 @@ def main(config):
         else:
             return render_error("Pipeline not found")
 
-        cache.set("zenhubapp_pipeline", str(pipeline_id), ttl_seconds=120)
+        cache.set("zenhubapp_pipeline_%s" % hash.md5(zenhub_gql_api_key), str(pipeline_id), ttl_seconds = 120)
 
     if issues_cache != None:
         print("[ZENHUB APP] Issues cache hit")
@@ -138,11 +139,11 @@ def main(config):
 
         issues_res = http.post(
             ZENHUB_GQL_API_URL,
-            headers={
+            headers = {
                 "Authorization": "Bearer %s" % zenhub_gql_api_key,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             },
-            json_body={
+            json_body = {
                 "operationName": "searchIssuesByPipeline",
                 "variables": {
                     "pipelineId": pipeline_id,
@@ -161,57 +162,57 @@ def main(config):
                         }
                       }
                     }
-                """
-            }
+                """,
+            },
         )
 
         if issues_res.status_code != 200:
             return render_error("Invalid Zenhub config")
 
         issues = issues_res.json()["data"]["searchIssuesByPipeline"]["nodes"]
-        cache.set("zenhubapp_issues", str(issues), ttl_seconds=120)
+        cache.set("zenhubapp_issues_%s" % hash.md5(zenhub_gql_api_key), str(issues), ttl_seconds = 120)
 
     issue_rows = []
 
     issue_colors = [
-        "#91e03a", # ZH Green
-        "#37e1fb", # ZH Blue
-        "#5c74f7", # ZH Purple
+        "#91e03a",  # ZH Green
+        "#37e1fb",  # ZH Blue
+        "#5c74f7",  # ZH Purple
     ]
 
     if len(issues) == 0:
         issue_rows = [
             render.Row(
-                expanded=True,
-                main_align="space_evenly",
-                cross_align="center",
-                children=[
+                expanded = True,
+                main_align = "space_evenly",
+                cross_align = "center",
+                children = [
                     render.WrappedText(
-                        content="No issues in this pipeline",
-                        color="#f75c5c"
+                        content = "No issues in this pipeline",
+                        color = "#f75c5c",
                     ),
                 ],
-            )
+            ),
         ]
     else:
         issue_rows = [
             render.Row(
-                expanded=True,
-                main_align="space_evenly",
-                cross_align="center",
-                children=[
+                expanded = True,
+                main_align = "space_evenly",
+                cross_align = "center",
+                children = [
                     render.Text(
-                        font="CG-pixel-3x5-mono",
-                        content="%s:" % int(issue["number"]),
-                        color=issue_colors[index]
+                        font = "CG-pixel-3x5-mono",
+                        content = "%s:" % int(issue["number"]),
+                        color = issue_colors[index],
                     ),
                     render.Marquee(
-                        width=50,
-                        offset_start=0,
-                        child=render.Text(
-                            font="CG-pixel-3x5-mono",
-                            content="%s" % issue["title"]
-                        )
+                        width = 50,
+                        offset_start = 0,
+                        child = render.Text(
+                            font = "CG-pixel-3x5-mono",
+                            content = "%s" % issue["title"],
+                        ),
                     ),
                 ],
             )
@@ -220,39 +221,39 @@ def main(config):
 
     return render.Root(
         child = render.Column(
-            expanded=True,
-            main_align="space_evenly",
-            cross_align="center",
-            children=[
+            expanded = True,
+            main_align = "space_evenly",
+            cross_align = "center",
+            children = [
                 render.Padding(
-                    pad=(1, 1, 0, 0),
-                    child=render.Row(
-                        expanded=True,
-                        main_align="start",
-                        cross_align="center",
-                        children=[
-                            render.Image(src=ZENHUB_ICON),
+                    pad = (1, 1, 0, 0),
+                    child = render.Row(
+                        expanded = True,
+                        main_align = "start",
+                        cross_align = "center",
+                        children = [
+                            render.Image(src = ZENHUB_ICON),
                             render.Padding(
-                                pad=(1, 0, 0, 0),
-                                child=render.Marquee(
-                                    width=50,
-                                    align="start",
-                                    child=render.Text("%s" % selected_pipeline),
-                                )
-                            )
+                                pad = (1, 0, 0, 0),
+                                child = render.Marquee(
+                                    width = 50,
+                                    align = "start",
+                                    child = render.Text("%s" % selected_pipeline),
+                                ),
+                            ),
                         ],
                     ),
                 ),
                 render.Padding(
-                    pad=(1, 1, 0, 0),
-                    child=render.Column(
-                        expanded=True,
-                        main_align="space_evenly",
-                        cross_align="start",
-                        children=issue_rows
-                    )
-                )
-            ]
+                    pad = (1, 1, 0, 0),
+                    child = render.Column(
+                        expanded = True,
+                        main_align = "space_evenly",
+                        cross_align = "start",
+                        children = issue_rows,
+                    ),
+                ),
+            ],
         ),
     )
 
@@ -261,10 +262,10 @@ def get_schema():
         version = "1",
         fields = [
             schema.Text(
-                id="zenhub_rest_api_key",
-                name="Zenhub REST API Token",
-                desc="Your personal Zenhub REST API Token. Generated at https://app.zenhub.com/settings/tokens",
-                icon="key",
+                id = "zenhub_rest_api_key",
+                name = "Zenhub REST API Token",
+                desc = "Your personal Zenhub REST API Token. Generated at https://app.zenhub.com/settings/tokens",
+                icon = "key",
             ),
             schema.Text(
                 id = "zenhub_gql_api_key",
@@ -273,34 +274,34 @@ def get_schema():
                 icon = "key",
             ),
             schema.Text(
-                id="workspace_id",
-                name="Zenhub Workspace ID",
-                desc="Your Zenhub Workspace ID. More info in https://github.com/ZenHubIO/API#endpoint-reference",
-                icon="key",
+                id = "workspace_id",
+                name = "Zenhub Workspace ID",
+                desc = "Your Zenhub Workspace ID. More info in https://github.com/ZenHubIO/API#endpoint-reference",
+                icon = "key",
             ),
             schema.Text(
-                id="repo_id",
-                name="Zenhub Repository ID",
-                desc="Your Zenhub Repository ID. More info in https://github.com/ZenHubIO/API#endpoint-reference",
-                icon="key",
+                id = "repo_id",
+                name = "Zenhub Repository ID",
+                desc = "Your Zenhub Repository ID. More info in https://github.com/ZenHubIO/API#endpoint-reference",
+                icon = "key",
             ),
             schema.Text(
-                id="selected_pipeline",
-                name="Pipeline Name",
-                desc="The Pipeline name to watch, case sensitive",
-                icon="tableColumns",
+                id = "selected_pipeline",
+                name = "Pipeline Name",
+                desc = "The Pipeline name to watch, case sensitive",
+                icon = "tableColumns",
             ),
             schema.Text(
-                id="selected_labels",
-                name="Filter by Labels",
-                desc="Labels to filter the issues. Separate by comma with no spaces. For example: backend,frontend,mobile",
-                icon="tags",
+                id = "selected_labels",
+                name = "Filter by Labels",
+                desc = "Labels to filter the issues. Separate by comma with no spaces. For example: backend,frontend,mobile",
+                icon = "tags",
             ),
             schema.Text(
-                id="selected_assignees",
-                name="Filter by Assignees",
-                desc="Github user to filter the issues by assignee. Separate by comma with no spaces. For example: user1,johndoe999",
-                icon="users",
+                id = "selected_assignees",
+                name = "Filter by Assignees",
+                desc = "Github user to filter the issues by assignee. Separate by comma with no spaces. For example: user1,johndoe999",
+                icon = "users",
             ),
         ],
     )
